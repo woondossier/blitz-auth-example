@@ -19,7 +19,10 @@ model User {
   name           String?
   email          String   @unique
   hashedPassword String?
-  role           String   @default("USER")
+
+  auth0Id   String?    @unique
+  companyId Int?
+  userRoles UserRole[] //@relation(fields: [userRoleId], references: [id], onDelete: Restrict)
 
   tokens   Token[]
   sessions Session[]
@@ -55,6 +58,14 @@ model Token {
   userId Int
 
   @@unique([hashedToken, type])
+}
+
+model UserRole {
+  id          String  @id
+  name        String
+  description String?
+
+  users User[]
 }
 
 // NOTE: It's highly recommended to use an enum for the token type

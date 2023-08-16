@@ -1,4 +1,4 @@
-import { Suspense } from "react"
+import { Suspense, useCallback } from "react"
 import Link from "next/link"
 import Layout from "src/core/layouts/Layout"
 import { useCurrentUser } from "src/users/hooks/useCurrentUser"
@@ -6,6 +6,8 @@ import logout from "src/auth/mutations/logout"
 import { useMutation } from "@blitzjs/rpc"
 import { Routes, BlitzPage } from "@blitzjs/next"
 import styles from "src/styles/Home.module.css"
+import { useRouter } from "next/router"
+import { useSession } from "@blitzjs/auth"
 
 /*
  * This file is just for a pleasant getting started page for your new app.
@@ -14,7 +16,56 @@ import styles from "src/styles/Home.module.css"
 
 const UserInfo = () => {
   const currentUser = useCurrentUser()
+  const session = useSession()
   const [logoutMutation] = useMutation(logout)
+  const router = useRouter()
+
+  const openPopup = useCallback(async () => {
+    const width = 400
+    const height = 600
+    const left = window.screenX + (window.innerWidth - width) / 2
+    const top = window.screenY + (window.innerHeight - height) / 2
+
+    return window.open(
+      //`/auth/login?redirectUrl=/handlelogin`,
+      `api/auth/auth0?redirectUrl=/handlelogin`,
+      "example:popup",
+      `left=${left},top=${top},width=${width},height=${height},resizable,scrollbars=yes,status=1,popup=yes`
+    )
+  }, [router.asPath])
+
+  const handleSignIn = useCallback(async () => {
+    const popup = await openPopup()
+    if (!popup) {
+      return
+    }
+
+    const result = await new Promise<boolean>((resolve, reject) => {
+      let popupEventListener: (e: MessageEvent) => void
+
+      popupEventListener = function (e: MessageEvent) {
+        if (!e.data || e.data.type !== "user-logged-in") {
+          return
+        }
+
+        window.removeEventListener("message", popupEventListener, false)
+
+        popup.close()
+
+        resolve(e.data.type)
+      }
+
+      window.addEventListener("message", popupEventListener)
+    })
+
+    if (!result) {
+      popup.close()
+      return false
+    }
+
+    await router.replace(router.asPath)
+    return true
+  }, [openPopup, router])
 
   if (currentUser) {
     return (
@@ -30,7 +81,12 @@ const UserInfo = () => {
         <div>
           User id: <code>{currentUser.id}</code>
           <br />
-          User role: <code>{currentUser.role}</code>
+          User role: <code>{currentUser.userRoles.pop()?.name ?? "no role"}</code>
+        </div>
+        <div>
+          User id: <code>{session.userId}</code>
+          <br />
+          User role: <code>{session.role}</code>
         </div>
       </>
     )
@@ -40,9 +96,7 @@ const UserInfo = () => {
         <Link href={Routes.SignupPage()} className={styles.button}>
           <strong>Sign Up</strong>
         </Link>
-        <Link href={Routes.LoginPage()} className={styles.loginButton}>
-          <strong>Login</strong>
-        </Link>
+        <button onClick={handleSignIn}>Popup Login</button>
       </>
     )
   }
